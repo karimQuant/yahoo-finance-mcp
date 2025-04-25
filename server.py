@@ -4,6 +4,7 @@ from enum import Enum
 import pandas as pd
 import yfinance as yf
 from mcp.server.fastmcp import FastMCP
+import numpy as np # Import numpy for histogram calculation
 
 
 # Define an enum for the type of financial statement
@@ -48,6 +49,7 @@ Available tools:
 - get_option_expiration_dates: Fetch the available options expiration dates for a given ticker symbol.
 - get_option_chain: Fetch the option chain for a given ticker symbol, expiration date, and option type.
 - get_recommendations: Get recommendations or upgrades/downgrades for a given ticker symbol from yahoo finance. You can also specify the number of months back to get upgrades/downgrades for, default is 12.
+- get_return_distribution: Calculate the histogram distribution of returns for a stock.
 """,
 )
 
@@ -406,12 +408,81 @@ async def get_recommendations(ticker: str, recommendation_type: str, months_back
             # Get the first occurrence (most recent) for each firm
             latest_by_firm = upgrades_downgrades.drop_duplicates(subset=["Firm"])
             return latest_by_firm.to_json(orient="records", date_format="iso")
+        else:
+             return f"Error: invalid recommendation type {recommendation_type}. Please use one of the following: {RecommendationType.recommendations}, {RecommendationType.upgrades_downgrades}."
     except Exception as e:
         print(f"Error: getting recommendations for {ticker}: {e}")
         return f"Error: getting recommendations for {ticker}: {e}"
 
 
+@yfinance_server.tool(
+    name="get_return_distribution",
+    description="""Calculate the histogram distribution of returns for a stock.
 
+Args:
+    ticker: str
+        The ticker symbol of the stock, e.g. "AAPL"
+    return_period_days: int
+        The number of days over which each individual return is calculated.
+    days_back: int
+        The total number of trading days of historical returns to consider for the distribution.
+    number_of_bins: int
+        The number of bins for the histogram.
+""",
+)
+async def get_return_distribution(
+    ticker: str, return_period_days: int, days_back: int, number_of_bins: int
+) -> str:
+    """Calculate the histogram distribution of returns for a stock."""
+    company = yf.Ticker(ticker)
+    try:
+        if company.isin is None:
+            print(f"Company ticker {ticker} not found.")
+            return f"Company ticker {ticker} not found."
+    except Exception as e:
+        print(f"Error: checking ticker {ticker}: {e}")
+        return f"Error: checking ticker {ticker}: {e}"
+
+    # Fetch historical data. Fetching 'max' period is safest to ensure enough data.
+    try:
+        hist_data = company.history(period="max")
+        if hist_data.empty:
+             print(f"No historical data found for ticker {ticker}.")
+             return f"No historical data found for ticker {ticker}."
+    except Exception as e:
+        print(f"Error fetching historical data for {ticker}: {e}")
+        return f"Error fetching historical data for {ticker}: {e}"
+
+    # Calculate the rolling return over return_period_days
+    # Use pct_change with periods to get the return over the specified number of days
+    returns = hist_data['Close'].pct_change(periods=return_period_days)
+
+    # Drop initial NaN values resulting from the rolling calculation
+    returns = returns.dropna()
+
+    # Ensure we have enough data points after dropping NaNs
+    if len(returns) < days_back:
+         print(f"Not enough historical data to calculate {days_back} returns over {return_period_days} days for {ticker}. Found {len(returns)} valid returns.")
+         return f"Not enough historical data to calculate {days_back} returns over {return_period_days} days for {ticker}. Found {len(returns)} valid returns."
+
+    # Take the last 'days_back' returns
+    recent_returns = returns.tail(days_back)
+
+    # Calculate the histogram
+    try:
+        counts, bin_edges = np.histogram(recent_returns, bins=number_of_bins)
+    except Exception as e:
+        print(f"Error calculating histogram for {ticker}: {e}")
+        return f"Error calculating histogram for {ticker}: {e}"
+
+    # Format the result
+    # Convert numpy arrays to lists for JSON serialization
+    histogram_data = {
+        "counts": counts.tolist(),
+        "bin_edges": bin_edges.tolist()
+    }
+
+    return json.dumps(histogram_data)
 
 
 if __name__ == "__main__":
