@@ -2,13 +2,13 @@ import json
 from enum import Enum
 from typing import List # Import List
 from datetime import datetime, timedelta # Import datetime and timedelta
-
+import requests
 import pandas as pd
 import yfinance as yf
 from mcp.server.fastmcp import FastMCP
 import numpy as np # Import numpy for histogram calculation
 
-
+AVAILABLE_PROXIES=["http://spqattzj5l:6yVXe73=unufv0QuTt@dc.decodo.com:10000"]
 # Define an enum for the type of financial statement
 class FinancialType(str, Enum):
     income_stmt = "income_stmt"
@@ -90,7 +90,8 @@ async def get_historical_stock_prices(
             Intraday data cannot extend last 60 days
             Default is "1d"
     """
-    company = yf.Ticker(ticker)
+    session = requests.Session(impersonate="chrome",proxy=AVAILABLE_PROXIES[0])
+    company = yf.Ticker(ticker,session=session)
     try:
         # Using info to check if ticker exists is more reliable than isin
         info = company.info
@@ -126,8 +127,9 @@ Args:
 """,
 )
 async def get_stock_info(ticker: str) -> str:
-    """Get stock information for a given ticker symbol"""
-    company = yf.Ticker(ticker)
+    """Get stock information for a given ticker symbol"""    
+    session = requests.Session(impersonate="chrome",proxy=AVAILABLE_PROXIES[0])
+    company = yf.Ticker(ticker,session=session)
     try:
         info = company.info
         if not info:
@@ -155,7 +157,8 @@ async def get_yahoo_finance_news(ticker: str) -> str:
         ticker: str
             The ticker symbol of the stock to get news for, e.g. "AAPL"
     """
-    company = yf.Ticker(ticker)
+    session = requests.Session(impersonate="chrome",proxy=AVAILABLE_PROXIES[0])
+    company = yf.Ticker(ticker,session=session)
     try:
         info = company.info
         if not info:
@@ -203,7 +206,8 @@ Args:
 async def get_stock_actions(ticker: str) -> str:
     """Get stock dividends and stock splits for a given ticker symbol"""
     try:
-        company = yf.Ticker(ticker)
+        session = requests.Session(impersonate="chrome",proxy=AVAILABLE_PROXIES[0])
+        company = yf.Ticker(ticker,session=session)
         info = company.info
         if not info:
              print(f"Company ticker {ticker} not found or no info available.")
@@ -237,8 +241,9 @@ Args:
 )
 async def get_financial_statement(ticker: str, financial_type: str) -> str:
     """Get financial statement for a given ticker symbol"""
+    session = requests.Session(impersonate="chrome",proxy=AVAILABLE_PROXIES[0])
+    company = yf.Ticker(ticker,session=session)
 
-    company = yf.Ticker(ticker)
     try:
         info = company.info
         if not info:
@@ -311,7 +316,8 @@ Args:
 async def get_holder_info(ticker: str, holder_type: str) -> str:
     """Get holder information for a given ticker symbol"""
 
-    company = yf.Ticker(ticker)
+    session = requests.Session(impersonate="chrome",proxy=AVAILABLE_PROXIES[0])
+    company = yf.Ticker(ticker,session=session)
     try:
         info = company.info
         if not info:
@@ -377,7 +383,8 @@ Args:
 async def get_option_expiration_dates(ticker: str) -> str:
     """Fetch the available options expiration dates for a given ticker symbol."""
 
-    company = yf.Ticker(ticker)
+    session = requests.Session(impersonate="chrome",proxy=AVAILABLE_PROXIES[0])
+    company = yf.Ticker(ticker,session=session)
     try:
         info = company.info
         if not info:
@@ -422,8 +429,8 @@ async def get_option_chain(ticker: str, expiration_date: str, option_type: str) 
     Returns:
         str: JSON string containing the option chain data
     """
-
-    company = yf.Ticker(ticker)
+    session = requests.Session(impersonate="chrome",proxy=AVAILABLE_PROXIES[0])
+    company = yf.Ticker(ticker,session=session)
     try:
         info = company.info
         if not info:
@@ -477,7 +484,8 @@ Args:
 )
 async def get_recommendations(ticker: str, recommendation_type: str, months_back: int = 12) -> str:
     """Get recommendations or upgrades/downgrades for a given ticker symbol"""
-    company = yf.Ticker(ticker)
+    session = requests.Session(impersonate="chrome",proxy=AVAILABLE_PROXIES[0])
+    company = yf.Ticker(ticker,session=session)
     try:
         info = company.info
         if not info:
@@ -537,7 +545,8 @@ async def get_return_distribution(
     ticker: str, return_period_days: int, days_back: int, number_of_bins: int
 ) -> str:
     """Calculate the histogram distribution of returns for a stock."""
-    company = yf.Ticker(ticker)
+    session = requests.Session(impersonate="chrome",proxy=AVAILABLE_PROXIES[0])
+    company = yf.Ticker(ticker,session=session)
     try:
         info = company.info
         if not info:
@@ -675,6 +684,12 @@ async def calculate_correlations(tickers: List[str], days_back: int) -> str:
 
 
 if __name__ == "__main__":
+    import os
     # Initialize and run the server
-    print("Starting Yahoo Finance MCP server...")
-    yfinance_server.run(transport="stdio")
+    
+    if os.environ.get("USE_SSE") == "true":
+        print("Starting Yahoo Finance MCP server with SSE transport.")
+        yfinance_server.run(transport="sse")
+    else:
+        print("Starting Yahoo Finance MCP server with stdio transport.")
+        yfinance_server.run(transport="stdio")
