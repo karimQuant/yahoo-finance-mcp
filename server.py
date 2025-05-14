@@ -2,7 +2,7 @@ import json
 from enum import Enum
 from typing import List # Import List
 from datetime import datetime, timedelta # Import datetime and timedelta
-import requests
+from curl_cffi import requests
 import pandas as pd
 import yfinance as yf
 from mcp.server.fastmcp import FastMCP
